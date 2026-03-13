@@ -61,23 +61,3 @@ Full methodology, tool cheatsheet, and findings classification:
 
 > **For authorised penetration testing only.**
 > Confirm written scope before running any module.
-
----
-
-## Hidden Folders in This Directory
-
-> ⚠ **Reminder:** There is a hidden `.claude/` folder inside this project directory
-> (`showdown/.claude/`). It contains Claude Code project settings (`settings.local.json`).
-> If you copy or archive this folder, **include hidden files** or you will lose those settings.
->
-> Claude Code's session memory (context across conversations) lives **outside** this folder at:
-> `~/.claude/projects/-home-ev-Documents-clault-showdown/memory/`
-> That directory is not included when you copy the showdown folder — back it up separately
-> if you want to preserve AI session notes.
->
-> To include all hidden files when copying:
-> ```bash
-> cp -r showdown/ destination/            # cp includes hidden dirs by default
-> tar -czf showdown.tar.gz showdown/      # tar includes hidden dirs by default
-> rsync -av showdown/ destination/        # rsync includes hidden dirs by default
-> ```
