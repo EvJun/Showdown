@@ -1,0 +1,5 @@
+# Add your target IP, range, or CIDR here
+# Examples:
+#   192.168.1.0/24
+#   10.0.0.1
+#   192.168.1.1-20
