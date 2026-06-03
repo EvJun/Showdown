@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/common.sh — Shared utilities for SHOWDOWN framework
+# lib/common.sh - Shared utilities for SHOWDOWN framework
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -70,14 +70,14 @@ require_tool() {
 tool_or_skip() {
     # tool_or_skip <tool> <description>
     if ! command -v "$1" &>/dev/null; then
-        warn "Skipping — $1 not installed ($2)"
+        warn "Skipping - $1 not installed ($2)"
         return 1
     fi
     return 0
 }
 
 # ─── Command runner ───────────────────────────────────────────────────────────
-# run_cmd <outfile> <cmd...>  — runs, tees to screen+log+outfile
+# run_cmd <outfile> <cmd...>  - runs, tees to screen+log+outfile
 run_cmd() {
     local outfile="$1"; shift
     info "CMD: $*"
@@ -91,7 +91,7 @@ run_cmd() {
     return $rc
 }
 
-# run_bg <outfile> <cmd...>  — runs in background, prints PID
+# run_bg <outfile> <cmd...>  - runs in background, prints PID
 run_bg() {
     local outfile="$1"; shift
     info "BG: $*"

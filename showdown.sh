@@ -31,6 +31,7 @@ VERSION="1.0.0"
 MODE="assisted"
 TARGET_FILE=""
 SESSION_NAME="pentest"
+ENGAGEMENT_TYPE=""
 
 # ─── Banner ───────────────────────────────────────────────────────────────────
 print_banner() {
@@ -82,6 +83,8 @@ usage() {
     table_row "-t, --targets <file>"  "Target IPs/CIDRs (one per line, # for comments)"
     table_row "-m, --mode <mode>"     "assisted | manual | auto  (default: assisted)"
     table_row "-s, --session <name>"  "Session name for output directory"
+    table_row "-i, --internal"        "Internal engagement (on-LAN; enables broadcast tools)"
+    table_row "-e, --external"        "External engagement (internet-facing; disables broadcast tools)"
     table_row "-h, --help"            "This help"
     echo ""
     echo -e "${BOLD}Modes:${NC}"
@@ -99,13 +102,60 @@ usage() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -t|--targets)  TARGET_FILE="$2";   shift 2 ;;
-            -m|--mode)     MODE="$2";           shift 2 ;;
-            -s|--session)  SESSION_NAME="$2";   shift 2 ;;
+            -t|--targets)  TARGET_FILE="$2";       shift 2 ;;
+            -m|--mode)     MODE="$2";             shift 2 ;;
+            -s|--session)  SESSION_NAME="$2";     shift 2 ;;
+            -i|--internal) ENGAGEMENT_TYPE="internal"; shift ;;
+            -e|--external) ENGAGEMENT_TYPE="external"; shift ;;
             -h|--help)     usage; exit 0 ;;
             *) error "Unknown argument: $1"; usage; exit 1 ;;
         esac
     done
+}
+
+# ─── Engagement type ──────────────────────────────────────────────────────────
+setup_engagement() {
+    if [[ -z "${ENGAGEMENT_TYPE}" ]]; then
+        echo ""
+        section "ENGAGEMENT TYPE"
+        echo -e "  ${CYAN}1)${NC} ${BOLD}Internal${NC}  - machine is on (or VPN'd into) the target's LAN"
+        echo -e "             ${DIM}Enables broadcast tools: Responder, LLMNR/NBT-NS poisoning${NC}"
+        echo -e "  ${CYAN}2)${NC} ${BOLD}External${NC}  - testing internet-facing systems from outside"
+        echo -e "             ${DIM}Broadcast/LAN tools will be blocked - not applicable${NC}"
+        echo ""
+        while true; do
+            echo -n "  Choice [1-2]: "
+            read -r _eng_choice
+            case "${_eng_choice}" in
+                1) ENGAGEMENT_TYPE="internal";  break ;;
+                2) ENGAGEMENT_TYPE="external";  break ;;
+                *) warn "Enter 1 or 2" ;;
+            esac
+        done
+    fi
+
+    echo ""
+    if [[ "${ENGAGEMENT_TYPE}" == "internal" ]]; then
+        echo -e "${RED}${BOLD}  ⚠  INTERNAL ENGAGEMENT - NETWORK IMPACT WARNING${NC}"
+        echo ""
+        echo -e "${YELLOW}  Some modules (Responder, LLMNR/NBT-NS poisoning) broadcast on your local"
+        echo -e "  network segment and will affect EVERY host on that segment - not only the"
+        echo -e "  declared targets. Running these from your own office or home network will"
+        echo -e "  capture hashes from your colleagues and disrupt normal operations."
+        echo ""
+        echo -e "  Before running any broadcast module confirm:"
+        echo -e "${NC}  ${CYAN}[1]${NC} Your machine is physically or via VPN on the CLIENT'S network"
+        echo -e "  ${CYAN}[2]${NC} The agreed scope covers this network segment"
+        echo -e "  ${CYAN}[3]${NC} You have read the remediation guide: ${BOLD}sop/REMEDIATION.md${NC}"
+        echo ""
+        if ! confirm "  Confirmed - I am on the target network. Continue?"; then
+            echo "  Connect to the target network first, then rerun."
+            exit 0
+        fi
+    else
+        info "External engagement - broadcast and LAN-only modules will be blocked."
+    fi
+    echo ""
 }
 
 # ─── Target setup ─────────────────────────────────────────────────────────────
@@ -195,7 +245,7 @@ run_module() {
 
 # ─── Manual mode ──────────────────────────────────────────────────────────────
 manual_mode() {
-    section "MANUAL MODE — Module Picker"
+    section "MANUAL MODE - Module Picker"
     info "Select modules individually. Results saved to session directory."
 
     while true; do
@@ -238,7 +288,7 @@ manual_mode() {
 
 # ─── Auto mode ────────────────────────────────────────────────────────────────
 auto_mode() {
-    section "AUTO MODE — Full Pipeline"
+    section "AUTO MODE - Full Pipeline"
     warn "This runs the full attack chain against all targets."
     warn "All phases fire automatically."
     echo ""
@@ -262,7 +312,7 @@ auto_mode() {
         section "▶ ${mod}"
         info "${MODULE_DESC[$mod]}"
         echo ""
-        run_module "${mod}" || warn "Module ${mod} reported errors — continuing"
+        run_module "${mod}" || warn "Module ${mod} reported errors - continuing"
         echo ""
     done
 
@@ -274,6 +324,7 @@ main() {
     print_banner
     parse_args "$@"
     legal_warning
+    setup_engagement
     setup_targets
     init_session "${SESSION_NAME}"
     register_modules
@@ -284,9 +335,10 @@ main() {
 
     echo ""
     section "SESSION READY"
-    table_row "Session"  "${SESSION_DIR}"
-    table_row "Mode"     "${MODE}"
-    table_row "Targets"  "${#TARGETS[@]}"
+    table_row "Session"    "${SESSION_DIR}"
+    table_row "Mode"       "${MODE}"
+    table_row "Engagement" "${ENGAGEMENT_TYPE}"
+    table_row "Targets"    "${#TARGETS[@]}"
     echo ""
 
     case "${MODE}" in
