@@ -44,6 +44,27 @@ echo "192.168.1.0/24" > targets.txt
 | Lateral move | `lateral_movement` | Responder, CME, Impacket, Kerberoasting, BloodHound |
 | Post-exploit | `post_exploit` | secretsdump, file hunting, LDAP AD enumeration |
 
+## Shodan Integration
+
+Shodan runs automatically during passive recon (step 6 of 7) if `SHODAN_API_KEY` is set. It queries Shodan's public database for each target IP — no packets are sent to the target.
+
+**What it retrieves:**
+- Open ports and service banners visible from the internet
+- Known CVEs associated with exposed services
+- ISP and organisation info
+
+**Setup:**
+```bash
+export SHODAN_API_KEY=your_key_here   # get a free key at account.shodan.io
+shodan init $SHODAN_API_KEY           # initialise the CLI
+```
+
+If the key is not set, Shodan is skipped silently and the rest of recon continues normally.
+
+**Output:** Results saved to `sessions/*/recon/shodan_<IP>.txt`. Any result containing CVE references is automatically flagged as a `HIGH` severity finding in `findings.md`.
+
+---
+
 ## Session Output
 
 Results saved to `sessions/<name>_<timestamp>/`:
